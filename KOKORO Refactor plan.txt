@@ -1,0 +1,186 @@
+# Kokoro-FastAPI Refactor Plan — Dexterous Group Deployment
+
+## Context
+
+Kokoro-FastAPI is a Docker-based TTS (text-to-speech) service wrapping the Kokoro-82M model. Currently running locally with full features (multi-language, GPU, web UI, debug endpoints, etc.).
+
+**Goal:** Strip it down to English-only, CPU-based deployment on a DigitalOcean Droplet with Docker, serving 3–5 concurrent users, while keeping core TTS functionality and the voice mixing feature intact.
+
+---
+
+## Decisions Locked In
+
+| Decision | Choice | Reason |
+|----------|--------|--------|
+| Deployment target | **DO Droplet + Docker** (not App Platform) | Model persists on disk — no re-download on restart. Better for concurrent users. |
+| Recommended droplet | **$24/mo — 4GB RAM, 2 vCPU** | Comfortably handles 3–5 concurrent CPU TTS requests |
+| Languages | **English-only** | Remove ja/ko/zh support |
+| Audio formats | **MP3 + WAV only** | Remove OPUS, FLAC, AAC, PCM |
+| Voice mixing | **Keep** | Core differentiator; already fully implemented |
+| `download_format` field | **Leave as-is** | No performance cost; removing risks breaking API clients |
+| `lang_code` backend | **No change needed** | Auto-detects English from voice name prefix (af_*, am_*, bf_*, bm_*) |
+| Debug/dev routers | **Remove** | Reduces attack surface |
+| UI rehaul | **Deferred to Phase 3** | Functional correctness first; UI to match Dexterous Studio branding |
+
+---
+
+## Deployment Architecture (Droplet)
+
+```
+DO Droplet (4GB RAM, 2 vCPU)
+└── Docker
+    └── kokoro-fastapi (CPU image)
+        ├── Model stored on persistent volume (downloaded once)
+        ├── Port 8880 exposed
+        └── Nginx reverse proxy (optional, for HTTPS)
+```
+
+**Environment variables** (set in `docker-compose.yml` or `.env` on the droplet):
+```
+USE_GPU=false
+DEVICE=cpu
+DOWNLOAD_MODEL=false        # Model already on disk after first run
+OUTPUT_DIR_SIZE_LIMIT_MB=200
+MAX_TEMP_DIR_SIZE_MB=512
+MAX_TEMP_DIR_AGE_HOURS=1
+ENABLE_WEB_PLAYER=true
+DEFAULT_VOICE=af_heart
+```
+
+---
+
+## Concurrency Note
+
+CPU TTS inference takes ~2–8 seconds per request depending on text length. FastAPI handles requests concurrently (async), but model inference is CPU-bound. With 3–5 simultaneous users, requests queue — users may wait 10–20 seconds at peak. This is acceptable for internal/studio use. If throughput needs to increase, upgrade to a larger droplet or GPU droplet.
+
+---
+
+## Phase 1 — Functional Backend & UI Cleanup (Current)
+
+**Goal:** Slim the codebase, remove unused deps, lock to English + MP3/WAV, remove debug surface.
+
+### 1A. Python Dependencies (`pyproject.toml`)
+
+**English-only Misaki** (currently line 36):
+```
+# Before:
+"misaki[en,ja,ko,zh]==0.9.4",
+
+# After:
+"misaki[en]==0.9.4",
+```
+
+**Remove unused packages** (not used in core API — only in `/examples`):
+- `sqlalchemy==2.0.27` — no database in the codebase
+- `matplotlib>=3.10.0` — only in benchmark scripts
+- `openai>=1.59.6` — only in example scripts
+- `tiktoken==0.8.0` — only in examples
+
+### 1B. API Routers (`api/src/main.py`)
+
+Remove:
+```python
+app.include_router(dev_router)    # /dev/* endpoints
+app.include_router(debug_router)  # /debug/* endpoints
+```
+Also remove their imports. Core endpoints (`/v1/audio/speech`, `/v1/audio/voices`, `/v1/models`, `/health`) unaffected.
+
+### 1C. Audio Format Schemas (`api/src/structures/schemas.py`)
+
+Slim `response_format` on both `OpenAISpeechRequest` and `CaptionedSpeechRequest`:
+```python
+# Before:
+response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"]
+
+# After:
+response_format: Literal["mp3", "wav"]
+```
+Leave `download_format` field as-is (optional, no cost, avoids breaking API clients).
+
+### 1D. Audio Writer (`api/src/services/streaming_audio_writer.py`)
+
+Remove codec branches for `opus`, `flac`, `aac`, `pcm` from `codec_map` and format checks.
+Keep: `wav` (pcm_s16le) and `mp3`. The `av` library stays — it handles both remaining formats.
+
+### 1E. Web UI — Language & Format Selector (`web/index.html`)
+
+- Remove the entire `<div class="lang-control">` block (language select dropdown)
+- Remove `<option value="pcm">PCM</option>` from the format selector
+- No JS changes needed — `lang_code` auto-detects from voice name prefix on the backend
+
+---
+
+## Phase 2 — Docker & Deployment Setup
+
+**Goal:** Slim the Docker image and configure for Droplet deployment.
+
+### 2A. Dockerfile (`docker/cpu/Dockerfile`)
+
+- Remove `g++` from apt packages (C++ compiler, build-time only)
+- Remove `git` from apt packages (not needed at runtime)
+- Keep: `espeak-ng`, `espeak-ng-data`, `libsndfile1`, `ffmpeg`, `curl`
+- Set `DOWNLOAD_MODEL=false` at build time (model lives on persistent volume)
+
+### 2B. Docker Compose for Droplet
+
+- Update `docker/cpu/docker-compose.yml` to mount a persistent volume for the model
+- Add `.env` file support for environment variables
+- Expose port 8880
+
+---
+
+## Phase 3 — UI Rehaul (Deferred)
+
+**Goal:** Redesign web UI to match Dexterous Studio branding.
+
+**Target layout (3-panel dark design):**
+- **Left panel** — Script Input (text area + character count)
+- **Center panel** — Voice Mixer (multi-voice selector with % weight sliders)
+- **Right panel** — Studio Config (Output Quality: MP3/WAV, Generation Speed slider, Generate Audio button)
+- **Bottom bar** — Persistent audio player (waveform + timestamp + download)
+- **Header** — Dexterous Studio logo, History, Book a Consult
+
+**Files to modify:**
+- `web/index.html` — full structural rewrite
+- `web/styles/` — full CSS rewrite (dark theme, Dexterous branding)
+- `web/src/components/VoiceSelector.js` — add % weight slider UI
+- Keep all JS service/state logic intact
+
+---
+
+## What Is NOT Changing (Core Functionality Preserved)
+
+- `POST /v1/audio/speech` endpoint (OpenAI-compatible) ✓
+- Kokoro-82M model inference ✓
+- Streaming audio generation ✓
+- English phonemization (espeak-ng) ✓
+- MP3 + WAV audio output ✓
+- Voice mixing (multi-voice with weights) ✓
+- Text normalization ✓
+- Web player UI (to be redesigned in Phase 3, not removed) ✓
+
+---
+
+## Verification Checklist
+
+### Phase 1
+- [ ] `docker build -f docker/cpu/Dockerfile .` succeeds
+- [ ] `POST /v1/audio/speech` with English text → MP3 response ✓
+- [ ] `POST /v1/audio/speech` with `response_format: "opus"` → 422 validation error ✓
+- [ ] `/debug/*` and `/dev/*` endpoints → 404 ✓
+- [ ] Web UI loads at `http://localhost:8880/web/` — no language selector, no PCM option ✓
+- [ ] Voice mixing still works ✓
+
+### Phase 2
+- [ ] Image size reduced vs. baseline (`docker image ls`)
+- [ ] Model persists across container restarts (volume mount)
+- [ ] `docker compose up` on droplet starts cleanly
+
+### Phase 3
+- [ ] Dexterous Studio branding renders correctly
+- [ ] Voice Mixer % sliders work and pass correct weights to API
+- [ ] Audio player bar persists across generations
+- [ ] Mobile responsive layout
+
+---
+
