@@ -73,3 +73,6 @@ uv.lock
 
 # Mac MPS virtualenv for dual testing
 .venv-mps
+
+# Github workflows
+.github/
