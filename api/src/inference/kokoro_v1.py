@@ -213,109 +213,110 @@ class KokoroV1(BaseModelBackend):
                 if self._check_memory():
                     self._clear_memory()
 
-            # Handle voice input
-            voice_path: str
-            voice_name: str
-            if isinstance(voice, tuple):
-                voice_name, voice_data = voice
-                if isinstance(voice_data, str):
-                    voice_path = voice_data
+            with torch.inference_mode():
+                # Handle voice input
+                voice_path: str
+                voice_name: str
+                if isinstance(voice, tuple):
+                    voice_name, voice_data = voice
+                    if isinstance(voice_data, str):
+                        voice_path = voice_data
+                    else:
+                        # Save tensor to temporary file
+                        import tempfile
+
+                        temp_dir = tempfile.gettempdir()
+                        voice_path = os.path.join(temp_dir, f"{voice_name}.pt")
+                        # Save tensor with CPU mapping for portability
+                        torch.save(voice_data.cpu(), voice_path)
                 else:
-                    # Save tensor to temporary file
-                    import tempfile
+                    voice_path = voice
+                    voice_name = os.path.splitext(os.path.basename(voice_path))[0]
 
-                    temp_dir = tempfile.gettempdir()
-                    voice_path = os.path.join(temp_dir, f"{voice_name}.pt")
-                    # Save tensor with CPU mapping for portability
-                    torch.save(voice_data.cpu(), voice_path)
-            else:
-                voice_path = voice
-                voice_name = os.path.splitext(os.path.basename(voice_path))[0]
-
-            # Load voice tensor with proper device mapping
-            voice_tensor = await paths.load_voice_tensor(
-                voice_path, device=self._device
-            )
-            # Save back to a temporary file with proper device mapping
-            import tempfile
-
-            temp_dir = tempfile.gettempdir()
-            temp_path = os.path.join(
-                temp_dir, f"temp_voice_{os.path.basename(voice_path)}"
-            )
-            await paths.save_voice_tensor(voice_tensor, temp_path)
-            voice_path = temp_path
-
-            # Use provided lang_code, settings voice code override, or first letter of voice name
-            pipeline_lang_code = (
-                lang_code
-                if lang_code
-                else (
-                    settings.default_voice_code
-                    if settings.default_voice_code
-                    else voice_name[0].lower()
+                # Load voice tensor with proper device mapping
+                voice_tensor = await paths.load_voice_tensor(
+                    voice_path, device=self._device
                 )
-            )
-            pipeline = self._get_pipeline(pipeline_lang_code)
+                # Save back to a temporary file with proper device mapping
+                import tempfile
 
-            logger.debug(
-                f"Generating audio for text with lang_code '{pipeline_lang_code}': '{text[:100]}{'...' if len(text) > 100 else ''}'"
-            )
-            for result in pipeline(
-                text, voice=voice_path, speed=speed, model=self._model
-            ):
-                if result.audio is not None:
-                    logger.debug(f"Got audio chunk with shape: {result.audio.shape}")
-                    word_timestamps = None
-                    if (
-                        return_timestamps
-                        and hasattr(result, "tokens")
-                        and result.tokens
-                    ):
-                        word_timestamps = []
-                        current_offset = 0.0
-                        logger.debug(
-                            f"Processing chunk timestamps with {len(result.tokens)} tokens"
-                        )
-                        if result.pred_dur is not None:
-                            try:
-                                # Add timestamps with offset
-                                for token in result.tokens:
-                                    if not all(
-                                        hasattr(token, attr)
-                                        for attr in [
-                                            "text",
-                                            "start_ts",
-                                            "end_ts",
-                                        ]
-                                    ):
-                                        continue
-                                    if not token.text or not token.text.strip():
-                                        continue
+                temp_dir = tempfile.gettempdir()
+                temp_path = os.path.join(
+                    temp_dir, f"temp_voice_{os.path.basename(voice_path)}"
+                )
+                await paths.save_voice_tensor(voice_tensor, temp_path)
+                voice_path = temp_path
 
-                                    start_time = float(token.start_ts) + current_offset
-                                    end_time = float(token.end_ts) + current_offset
-                                    word_timestamps.append(
-                                        WordTimestamp(
-                                            word=str(token.text).strip(),
-                                            start_time=start_time,
-                                            end_time=end_time,
-                                        )
-                                    )
-                                    logger.debug(
-                                        f"Added timestamp for word '{token.text}': {start_time:.3f}s - {end_time:.3f}s"
-                                    )
-
-                            except Exception as e:
-                                logger.error(
-                                    f"Failed to process timestamps for chunk: {e}"
-                                )
-
-                    yield AudioChunk(
-                        result.audio.numpy(), word_timestamps=word_timestamps
+                # Use provided lang_code, settings voice code override, or first letter of voice name
+                pipeline_lang_code = (
+                    lang_code
+                    if lang_code
+                    else (
+                        settings.default_voice_code
+                        if settings.default_voice_code
+                        else voice_name[0].lower()
                     )
-                else:
-                    logger.warning("No audio in chunk")
+                )
+                pipeline = self._get_pipeline(pipeline_lang_code)
+
+                logger.debug(
+                    f"Generating audio for text with lang_code '{pipeline_lang_code}': '{text[:100]}{'...' if len(text) > 100 else ''}'"
+                )
+                for result in pipeline(
+                    text, voice=voice_path, speed=speed, model=self._model
+                ):
+                    if result.audio is not None:
+                        logger.debug(f"Got audio chunk with shape: {result.audio.shape}")
+                        word_timestamps = None
+                        if (
+                            return_timestamps
+                            and hasattr(result, "tokens")
+                            and result.tokens
+                        ):
+                            word_timestamps = []
+                            current_offset = 0.0
+                            logger.debug(
+                                f"Processing chunk timestamps with {len(result.tokens)} tokens"
+                            )
+                            if result.pred_dur is not None:
+                                try:
+                                    # Add timestamps with offset
+                                    for token in result.tokens:
+                                        if not all(
+                                            hasattr(token, attr)
+                                            for attr in [
+                                                "text",
+                                                "start_ts",
+                                                "end_ts",
+                                            ]
+                                        ):
+                                            continue
+                                        if not token.text or not token.text.strip():
+                                            continue
+
+                                        start_time = float(token.start_ts) + current_offset
+                                        end_time = float(token.end_ts) + current_offset
+                                        word_timestamps.append(
+                                            WordTimestamp(
+                                                word=str(token.text).strip(),
+                                                start_time=start_time,
+                                                end_time=end_time,
+                                            )
+                                        )
+                                        logger.debug(
+                                            f"Added timestamp for word '{token.text}': {start_time:.3f}s - {end_time:.3f}s"
+                                        )
+
+                                except Exception as e:
+                                    logger.error(
+                                        f"Failed to process timestamps for chunk: {e}"
+                                    )
+
+                        yield AudioChunk(
+                            result.audio.numpy(), word_timestamps=word_timestamps
+                        )
+                    else:
+                        logger.warning("No audio in chunk")
 
         except Exception as e:
             logger.error(f"Generation failed: {e}")

@@ -4,6 +4,7 @@ export class VoiceService {
     constructor() {
         this.availableVoices = [];
         this.selectedVoices = new Map(); // Changed to Map to store voice:weight pairs
+        this._voiceSamplesAvailable = new Set(); // Voices that have pre-generated samples
     }
 
     async loadVoices() {
@@ -30,11 +31,31 @@ export class VoiceService {
                 }
             }
 
+            // Check which voices have pre-generated samples (non-blocking)
+            this._loadVoiceSamples();
+
             return this.availableVoices;
         } catch (error) {
             console.error('Failed to load voices:', error);
             throw error;
         }
+    }
+
+    async _loadVoiceSamples() {
+        // Check a batch of voices for available samples using HEAD requests
+        const checks = this.availableVoices.map(async (voice) => {
+            try {
+                const resp = await fetch(`voice_samples/${voice}.mp3`, { method: 'HEAD' });
+                if (resp.ok) {
+                    this._voiceSamplesAvailable.add(voice);
+                }
+            } catch { /* ignore */ }
+        });
+        await Promise.all(checks);
+    }
+
+    getVoiceSamplesAvailable() {
+        return this._voiceSamplesAvailable;
     }
 
     getAvailableVoices() {

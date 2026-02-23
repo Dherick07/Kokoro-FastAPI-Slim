@@ -757,6 +757,49 @@ html, body {
     background-size: 10px;
 }
 
+/* Voice option name (flex child) */
+.voice-option-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Voice preview play button */
+.voice-preview-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: var(--surface-1);
+    color: var(--ink-3);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all var(--t-fast);
+    padding: 0;
+}
+
+.voice-preview-btn:hover {
+    background: var(--jade);
+    color: #fff;
+    transform: scale(1.1);
+}
+
+.voice-preview-btn.playing {
+    background: var(--jade);
+    color: #fff;
+    animation: pulse-preview 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-preview {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 /* Selected voices list */
 .selected-voices {
     flex: 1;

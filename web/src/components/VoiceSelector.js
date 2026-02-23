@@ -8,6 +8,9 @@ export class VoiceSelector {
             selectedVoices: document.getElementById('selected-voices')
         };
         
+        this._previewAudio = null; // Shared Audio element for voice previews
+        this._previewingVoice = null; // Currently previewing voice name
+        
         this.setupEventListeners();
     }
 
@@ -33,9 +36,24 @@ export class VoiceSelector {
             this.renderVoiceOptions(filteredVoices);
         });
 
+        // Voice preview play button
+        this.elements.voiceOptions.addEventListener('mousedown', (e) => {
+            const playBtn = e.target.closest('.voice-preview-btn');
+            if (playBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const voice = playBtn.dataset.voice;
+                if (voice) this._togglePreview(voice);
+                return;
+            }
+        });
+
         // Voice selection - handle clicks on the entire voice option
         this.elements.voiceOptions.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Prevent blur on search input
+            
+            // Don't select voice when clicking play button
+            if (e.target.closest('.voice-preview-btn')) return;
             
             const voiceOption = e.target.closest('.voice-option');
             if (!voiceOption) return;
@@ -109,13 +127,25 @@ export class VoiceSelector {
     }
 
     renderVoiceOptions(voices) {
+        const samplesAvailable = this.voiceService.getVoiceSamplesAvailable();
         this.elements.voiceOptions.innerHTML = voices
-            .map(voice => `
+            .map(voice => {
+                const hasSample = samplesAvailable.has(voice);
+                const isPlaying = this._previewingVoice === voice;
+                return `
                 <div class="voice-option ${this.voiceService.getSelectedVoices().includes(voice) ? 'selected' : ''}" 
                      data-voice="${voice}">
-                    ${voice}
+                    <span class="voice-option-name">${voice}</span>
+                    ${hasSample ? `<button class="voice-preview-btn ${isPlaying ? 'playing' : ''}" data-voice="${voice}" title="Preview voice">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            ${isPlaying 
+                                ? '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>'
+                                : '<path d="M8 5v14l11-7z"/>'
+                            }
+                        </svg>
+                    </button>` : ''}
                 </div>
-            `)
+            `})
             .join('');
     }
 
@@ -155,6 +185,56 @@ export class VoiceSelector {
         if (voiceOption) {
             voiceOption.classList.toggle('selected', selected);
         }
+    }
+
+    _togglePreview(voice) {
+        // If already playing this voice, stop it
+        if (this._previewingVoice === voice && this._previewAudio) {
+            this._previewAudio.pause();
+            this._previewAudio.currentTime = 0;
+            this._previewingVoice = null;
+            this._updatePreviewButtons();
+            return;
+        }
+
+        // Stop any current preview
+        if (this._previewAudio) {
+            this._previewAudio.pause();
+            this._previewAudio.currentTime = 0;
+        }
+
+        // Build the sample URL relative to the web player root
+        const sampleUrl = `voice_samples/${voice}.mp3`;
+        this._previewAudio = new Audio(sampleUrl);
+        this._previewingVoice = voice;
+        this._updatePreviewButtons();
+
+        this._previewAudio.addEventListener('ended', () => {
+            this._previewingVoice = null;
+            this._updatePreviewButtons();
+        });
+
+        this._previewAudio.addEventListener('error', () => {
+            console.warn(`No voice sample available for ${voice}`);
+            this._previewingVoice = null;
+            this._updatePreviewButtons();
+        });
+
+        this._previewAudio.play().catch(() => {
+            this._previewingVoice = null;
+            this._updatePreviewButtons();
+        });
+    }
+
+    _updatePreviewButtons() {
+        this.elements.voiceOptions.querySelectorAll('.voice-preview-btn').forEach(btn => {
+            const voice = btn.dataset.voice;
+            const isPlaying = this._previewingVoice === voice;
+            btn.classList.toggle('playing', isPlaying);
+            btn.querySelector('svg').innerHTML = isPlaying
+                ? '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>'
+                : '<path d="M8 5v14l11-7z"/>';
+        });
     }
 
     async initialize() {
