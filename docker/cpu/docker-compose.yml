@@ -9,6 +9,9 @@ services:
     user: "1000:1000"  # Match the Dockerfile's appuser UID
     ports:
       - "8880:8880"
+    mem_limit: 3500m
+    memswap_limit: 7000m  # Allow up to 3.5GB swap usage
+    restart: unless-stopped
     environment:
       - PYTHONPATH=/app:/app/api
       - USE_GPU=false
@@ -16,3 +19,4 @@ services:
       - PYTHONUNBUFFERED=1
       - API_LOG_LEVEL=DEBUG
       - DOWNLOAD_MODEL=true
+      - PYTORCH_NO_CUDA_MEMORY_CACHING=1

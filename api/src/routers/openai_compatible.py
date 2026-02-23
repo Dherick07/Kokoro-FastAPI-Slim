@@ -1,5 +1,6 @@
 """OpenAI-compatible router for text-to-speech"""
 
+import gc
 import io
 import json
 import os
@@ -261,6 +262,7 @@ async def create_speech(
                         if not temp_writer._finalized:
                             await temp_writer.__aexit__(None, None, None)
                         writer.close()
+                        gc.collect()
 
                 # Stream with temp file writing
                 return StreamingResponse(
@@ -277,6 +279,8 @@ async def create_speech(
                     logger.error(f"Error in single output streaming: {e}")
                     writer.close()
                     raise
+                finally:
+                    gc.collect()
 
             # Standard streaming without download link
             return StreamingResponse(

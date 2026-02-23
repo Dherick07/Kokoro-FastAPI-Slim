@@ -339,6 +339,7 @@ class KokoroV1(BaseModelBackend):
 
     def _clear_memory(self) -> None:
         """Clear device memory."""
+        import gc
         if self._device == "cuda":
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
@@ -346,6 +347,7 @@ class KokoroV1(BaseModelBackend):
             # Empty cache if available (future-proofing)
             if hasattr(torch.mps, "empty_cache"):
                 torch.mps.empty_cache()
+        gc.collect()
 
     def unload(self) -> None:
         """Unload model and free resources."""
