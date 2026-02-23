@@ -31,8 +31,8 @@ export class VoiceService {
                 }
             }
 
-            // Check which voices have pre-generated samples (non-blocking)
-            this._loadVoiceSamples();
+            // Load voice sample manifest (await so play buttons render immediately)
+            await this._loadVoiceSamples();
 
             return this.availableVoices;
         } catch (error) {
@@ -42,16 +42,16 @@ export class VoiceService {
     }
 
     async _loadVoiceSamples() {
-        // Check a batch of voices for available samples using HEAD requests
-        const checks = this.availableVoices.map(async (voice) => {
-            try {
-                const resp = await fetch(`voice_samples/${voice}.mp3`, { method: 'HEAD' });
-                if (resp.ok) {
-                    this._voiceSamplesAvailable.add(voice);
+        // Load manifest of available voice samples (single request, no 500s)
+        try {
+            const resp = await fetch('voice_samples/manifest.json');
+            if (resp.ok) {
+                const voices = await resp.json();
+                for (const v of voices) {
+                    this._voiceSamplesAvailable.add(v);
                 }
-            } catch { /* ignore */ }
-        });
-        await Promise.all(checks);
+            }
+        } catch { /* ignore — play buttons just won't show */ }
     }
 
     getVoiceSamplesAvailable() {

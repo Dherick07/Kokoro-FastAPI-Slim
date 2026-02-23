@@ -142,6 +142,14 @@ def main():
     print(f"  Errors:    {results['error']}")
     print(f"  Total:     {sum(results.values())}")
 
+    # Write manifest.json for the web UI
+    manifest = sorted(
+        f.stem for f in OUTPUT_DIR.glob("*.mp3") if f.stat().st_size > 0
+    )
+    manifest_path = OUTPUT_DIR / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    print(f"\nManifest written: {manifest_path} ({len(manifest)} voices)")
+
 
 if __name__ == "__main__":
     main()

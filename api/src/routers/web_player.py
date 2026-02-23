@@ -58,7 +58,7 @@ async def serve_web_file(filename: str):
             },
         )
 
-    except RuntimeError as e:
+    except (RuntimeError, FileNotFoundError) as e:
         logger.warning(f"Web file not found: {filename}")
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
