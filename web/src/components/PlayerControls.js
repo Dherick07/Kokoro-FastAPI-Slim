@@ -104,21 +104,31 @@ export class PlayerControls {
         });
     }
 
+    setPlayIcon(playing) {
+        const icon = document.getElementById('play-icon');
+        if (icon) {
+            icon.setAttribute('d', playing
+                ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'  // pause
+                : 'M8 5v14l11-7z'                      // play
+            );
+        }
+    }
+
     setupAudioEvents() {
         this.audioService.addEventListener('play', () => {
-            this.elements.playPauseBtn.textContent = 'Pause';
+            this.setPlayIcon(true);
             this.playerState.setPlaying(true);
             this.startTimeUpdate();
         });
 
         this.audioService.addEventListener('pause', () => {
-            this.elements.playPauseBtn.textContent = 'Play';
+            this.setPlayIcon(false);
             this.playerState.setPlaying(false);
             this.stopTimeUpdate();
         });
 
         this.audioService.addEventListener('ended', () => {
-            this.elements.playPauseBtn.textContent = 'Play';
+            this.setPlayIcon(false);
             this.playerState.setPlaying(false);
             this.stopTimeUpdate();
         });
@@ -132,9 +142,10 @@ export class PlayerControls {
     }
 
     updateControls(state) {
-        // Update button states
-        this.elements.playPauseBtn.disabled = !state.duration && !state.isGenerating;
-        this.elements.seekSlider.disabled = !state.duration;
+        // Enable play button if audio exists (duration may be NaN/Infinity for streaming), or generating
+        const audioExists = this.audioService && this.audioService.audio && !this.audioService.audio.error;
+        this.elements.playPauseBtn.disabled = !audioExists && !state.isGenerating;
+        this.elements.seekSlider.disabled = !state.duration || !isFinite(state.duration);
         this.elements.cancelBtn.style.display = state.isGenerating ? 'block' : 'none';
         
         // Update volume and speed if changed externally
@@ -157,7 +168,7 @@ export class PlayerControls {
             this.playerState.reset();
         }
         // Reset UI elements
-        this.elements.playPauseBtn.textContent = 'Play';
+        this.setPlayIcon(false);
         this.elements.playPauseBtn.disabled = true;
         this.elements.seekSlider.value = 0;
         this.elements.seekSlider.disabled = true;

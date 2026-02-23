@@ -76,3 +76,7 @@ uv.lock
 
 # Github workflows
 .github/
+.windsurf/
+
+# Documentation
+FUTURE_ENHANCEMENTS.md

@@ -12,9 +12,19 @@ export class VoiceSelector {
     }
 
     setupEventListeners() {
-        // Voice search focus
+        // Voice search focus — open dropdown
         this.elements.voiceSearch.addEventListener('focus', () => {
             this.elements.voiceDropdown.classList.add('show');
+        });
+
+        // Clicking the search bar again toggles dropdown closed
+        this.elements.voiceSearch.addEventListener('mousedown', (e) => {
+            if (document.activeElement === this.elements.voiceSearch &&
+                this.elements.voiceDropdown.classList.contains('show')) {
+                e.preventDefault();
+                this.elements.voiceDropdown.classList.remove('show');
+                this.elements.voiceSearch.blur();
+            }
         });
 
         // Voice search
