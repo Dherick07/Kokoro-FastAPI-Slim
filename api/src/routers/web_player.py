@@ -30,6 +30,7 @@ async def get_web_config():
 
 
 @router.get("/{filename:path}")
+@router.head("/{filename:path}")
 async def serve_web_file(filename: str):
     """Serve web player static files asynchronously."""
     if not settings.enable_web_player:

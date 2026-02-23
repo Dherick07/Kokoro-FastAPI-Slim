@@ -143,6 +143,18 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/")
+async def root_notice():
+    """Root endpoint with notice about web UI location"""
+    return {
+        "message": "Kokoro TTS API is running",
+        "web_ui": "/web/",
+        "docs": "Visit /web/ for the web interface",
+        "api": "Use /v1/audio/speech for TTS generation",
+        "health": "Check /health for status"
+    }
+
+
 @app.get("/v1/test")
 async def test_endpoint():
     """Test endpoint to verify routing"""
