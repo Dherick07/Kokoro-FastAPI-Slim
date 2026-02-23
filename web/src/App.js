@@ -39,7 +39,12 @@ export class App {
             linesPerPage: 20,
             onTextChange: (text) => {
                 if (this.elements.charCount) {
-                    this.elements.charCount.textContent = `Characters: ${text.length}`;
+                    this.elements.charCount.textContent = `Characters: ${text.length} / 750`;
+                    this.elements.charCount.classList.toggle('warning', text.length > 700 && text.length <= 750);
+                    this.elements.charCount.classList.toggle('over-limit', text.length > 750);
+                }
+                if (this.elements.generateBtn) {
+                    this.elements.generateBtn.disabled = text.length > 750;
                 }
             }
         });
@@ -138,6 +143,10 @@ export class App {
         const text = this.textEditor.getText().trim();
         if (!text) {
             this.showStatus('Please enter some text', 'error');
+            return false;
+        }
+        if (text.length > 750) {
+            this.showStatus('Input must be 750 characters or fewer', 'error');
             return false;
         }
         if (!this.voiceService.hasSelectedVoices()) {

@@ -2,7 +2,7 @@ from email.policy import default
 from enum import Enum
 from typing import List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class VoiceCombineRequest(BaseModel):
@@ -122,6 +122,13 @@ class OpenAISpeechRequest(BaseModel):
         description="Options for the normalization system",
     )
 
+    @field_validator("input")
+    @classmethod
+    def check_input_length(cls, v):
+        if len(v) > 750:
+            raise ValueError("Input must be 750 characters or fewer.")
+        return v
+
 
 class CaptionedSpeechRequest(BaseModel):
     """Request schema for captioned speech endpoint"""
@@ -169,3 +176,10 @@ class CaptionedSpeechRequest(BaseModel):
         default=NormalizationOptions(),
         description="Options for the normalization system",
     )
+
+    @field_validator("input")
+    @classmethod
+    def check_input_length(cls, v):
+        if len(v) > 750:
+            raise ValueError("Input must be 750 characters or fewer.")
+        return v

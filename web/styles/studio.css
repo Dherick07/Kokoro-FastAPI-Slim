@@ -482,6 +482,17 @@ html, body {
     font-size: 10px;
     color: var(--ink-4);
     margin-left: auto;
+    transition: color 0.2s ease;
+}
+
+.char-count.warning {
+    color: #b8860b;
+    font-weight: 500;
+}
+
+.char-count.over-limit {
+    color: #c0392b;
+    font-weight: 600;
 }
 
 .file-input { display: none; }

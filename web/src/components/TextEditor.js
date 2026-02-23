@@ -224,7 +224,9 @@ export default class TextEditor {
 
     updateCharCount() {
         const totalChars = this.fullText.length;
-        this.elements.charCount.textContent = `${totalChars} characters`;
+        this.elements.charCount.textContent = `${totalChars} / 750`;
+        this.elements.charCount.classList.toggle('warning', totalChars > 700 && totalChars <= 750);
+        this.elements.charCount.classList.toggle('over-limit', totalChars > 750);
     }
 
     prevPage() {
