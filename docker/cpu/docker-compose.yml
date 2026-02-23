@@ -6,6 +6,7 @@ services:
       dockerfile: docker/cpu/Dockerfile
     volumes:
       - ../../api:/app/api
+      - ../../web:/app/web
     user: "1000:1000"  # Match the Dockerfile's appuser UID
     ports:
       - "8880:8880"
